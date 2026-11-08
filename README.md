@@ -27,5 +27,5 @@ p = 23, g = 5, a = 6, b = 15 cho A = 8, B = 19 và khoá chung K = 2.
 
 ## Lưu ý
 
-- RSA trong phần phòng thủ chỉ 64 bit để minh hoạ, không dùng trong thực tế.
-- Mã dòng trong `core/stream.py` chỉ để minh hoạ, không có xác thực toàn vẹn.
+ RSA trong phần phòng thủ chỉ 64 bit để minh hoạ, không dùng trong thực tế.
+Mã dòng trong `core/stream.py` chỉ để minh hoạ, không có xác thực toàn vẹn.
