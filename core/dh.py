@@ -1,9 +1,7 @@
 import math
 import secrets
 
-# ==============================================================================
-# 1. CÁC HÀM TOÁN HỌC LÕI & SHA-256 TỰ VIẾT (PURE PYTHON - KHÔNG DÙNG HASHLIB)
-# ==============================================================================
+# Các Hàm Toán Học
 
 def mod_exp(base: int, exp: int, mod: int, return_steps: bool = False):
     """Tính (base^exp) % mod bằng thuật toán bình phương và nhân liên tiếp."""
@@ -71,9 +69,8 @@ def custom_sha256_bytes(data: bytes) -> bytes:
     return b''.join(x.to_bytes(4, 'big') for x in H)
 
 
-# ==============================================================================
-# 2. KIỂM TRA THAM SỐ, SINH THAM SỐ, NHÓM RFC 3526
-# ==============================================================================
+#  Kiểm Tra Tham Số, Sinh Số Tham Số, Nhóm RFC 3526
+
 
 def is_prime_miller_rabin(n: int, k: int = 15) -> bool:
     """Kiểm tra số nguyên tố bằng Miller-Rabin (cơ số ngẫu nhiên từ secrets)."""
@@ -163,9 +160,7 @@ RFC_3526_2048_P = int(
 RFC_3526_2048_G = 2
 
 
-# ==============================================================================
-# 3. TOÁN TỬ CHO SAS VÀ CHỮ KÝ SỐ (RSA đồ chơi, chỉ để minh hoạ)
-# ==============================================================================
+# Toán Tử Cho SAS Và Chữ Ký Số
 
 def sas_code(A: int, B: int, K: int) -> str:
     """Mã xác thực ngắn (SAS, 4 ký tự hex) = SHA-256 của (A, B, K) mà MỘT bên nhìn thấy."""
@@ -200,9 +195,8 @@ def rsa_verify(msg: str, sig: int, pub) -> bool:
     return mod_exp(sig, e, n) == _digest_int(msg, n)
 
 
-# ==============================================================================
-# 4. NHẬP THAM SỐ DÙNG CHUNG (chế độ DH thường và chế độ MITM đều dùng)
-# ==============================================================================
+#  Nhập Tham Số
+
 
 # Bộ mặc định = ví dụ ở mục 4.2 của báo cáo (bỏ trống rồi bấm Enter để dùng).
 MAC_DINH = {"p": 23, "g": 5, "a": 6, "b": 15, "c": 3}
@@ -304,9 +298,7 @@ def nhap_tham_so_dh(can_mallory: bool = False):
     return p, g, a, b, c
 
 
-# ==============================================================================
-# 5. MÔ PHỎNG TẤN CÔNG NGƯỜI ĐỨNG GIỮA (nhận tham số từ phần nhập)
-# ==============================================================================
+# Mô Phỏng Tấn Công MITM
 
 def run_mitm_simulation(p: int, g: int, a: int, b: int, c: int):
     """In mô phỏng MITM và TRẢ VỀ (K_alice, K_bob, K_mal_alice, K_mal_bob) để CLI dùng tiếp."""
@@ -335,9 +327,9 @@ def run_mitm_simulation(p: int, g: int, a: int, b: int, c: int):
     return K_alice, K_bob, K_mal_alice, K_mal_bob
 
 
-# ==============================================================================
-# 6. MÔ PHỎNG PHÒNG THỦ: SAS VÀ CHỮ KÝ SỐ (nhận tham số từ phần nhập)
-# ==============================================================================
+
+# Mô Phỏng Phòng Thủ: SAS Và Chữ Ký Số
+
 
 def run_defense_simulation(p: int, g: int, a: int, b: int, c: int):
     A, B = mod_exp(g, a, p), mod_exp(g, b, p)
@@ -371,9 +363,9 @@ def run_defense_simulation(p: int, g: int, a: int, b: int, c: int):
         print(f"                   Bob kiểm tra (M = {M}, chữ ký cũ): {ok_gia}  -> từ chối, phát hiện MITM")
 
 
-# ==============================================================================
-# 7. LUỒNG NHẬP CHÍNH
-# ==============================================================================
+
+# Input
+
 
 def kiem_tra_khoa_cong_khai(ten: str, y: int, p: int) -> bool:
     """In kết quả validate_pub; nếu không hợp lệ thì giải thích vì sao phải dừng."""
