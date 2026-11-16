@@ -1,7 +1,9 @@
 import math
 import secrets
 
-# Các Hàm Toán Học
+# ==============================================================================
+# 1. CÁC HÀM TOÁN HỌC LÕI & SHA-256 TỰ VIẾT (PURE PYTHON - KHÔNG DÙNG HASHLIB)
+# ==============================================================================
 
 def mod_exp(base: int, exp: int, mod: int, return_steps: bool = False):
     """Tính (base^exp) % mod bằng thuật toán bình phương và nhân liên tiếp."""
@@ -69,8 +71,9 @@ def custom_sha256_bytes(data: bytes) -> bytes:
     return b''.join(x.to_bytes(4, 'big') for x in H)
 
 
-#  Kiểm Tra Tham Số, Sinh Số Tham Số, Nhóm RFC 3526
-
+# ==============================================================================
+# 2. KIỂM TRA THAM SỐ, SINH THAM SỐ, NHÓM RFC 3526
+# ==============================================================================
 
 def is_prime_miller_rabin(n: int, k: int = 15) -> bool:
     """Kiểm tra số nguyên tố bằng Miller-Rabin (cơ số ngẫu nhiên từ secrets)."""
@@ -134,7 +137,10 @@ def find_generator(p: int) -> int:
 
 
 def gen_params(bits: int = 16) -> tuple[int, int]:
-    """Sinh safe prime p = 2q + 1 (q nguyên tố) và căn nguyên thuỷ g."""
+    """Sinh safe prime p = 2q + 1 (q nguyên tố) và căn nguyên thuỷ g.
+    bits là độ dài (bit) của p, phải >= 3 (p nhỏ nhất là 7); bits nhỏ hơn thì báo ValueError thay vì lặp vô hạn."""
+    if bits < 3:
+        raise ValueError("bits phải >= 3 (safe prime nhỏ nhất là p = 7).")
     while True:
         q = secrets.randbits(bits - 1) | (1 << (bits - 2)) | 1
         if is_prime_miller_rabin(q):
@@ -160,7 +166,9 @@ RFC_3526_2048_P = int(
 RFC_3526_2048_G = 2
 
 
-# Toán Tử Cho SAS Và Chữ Ký Số
+# ==============================================================================
+# 3. TOÁN TỬ CHO SAS VÀ CHỮ KÝ SỐ (RSA đồ chơi, chỉ để minh hoạ)
+# ==============================================================================
 
 def sas_code(A: int, B: int, K: int) -> str:
     """Mã xác thực ngắn (SAS, 4 ký tự hex) = SHA-256 của (A, B, K) mà MỘT bên nhìn thấy."""
@@ -195,8 +203,9 @@ def rsa_verify(msg: str, sig: int, pub) -> bool:
     return mod_exp(sig, e, n) == _digest_int(msg, n)
 
 
-#  Nhập Tham Số
-
+# ==============================================================================
+# 4. NHẬP THAM SỐ DÙNG CHUNG (chế độ DH thường và chế độ MITM đều dùng)
+# ==============================================================================
 
 # Bộ mặc định = ví dụ ở mục 4.2 của báo cáo (bỏ trống rồi bấm Enter để dùng).
 MAC_DINH = {"p": 23, "g": 5, "a": 6, "b": 15, "c": 3}
@@ -298,7 +307,9 @@ def nhap_tham_so_dh(can_mallory: bool = False):
     return p, g, a, b, c
 
 
-# Mô Phỏng Tấn Công MITM
+# ==============================================================================
+# 5. MÔ PHỎNG TẤN CÔNG NGƯỜI ĐỨNG GIỮA (nhận tham số từ phần nhập)
+# ==============================================================================
 
 def run_mitm_simulation(p: int, g: int, a: int, b: int, c: int):
     """In mô phỏng MITM và TRẢ VỀ (K_alice, K_bob, K_mal_alice, K_mal_bob) để CLI dùng tiếp."""
@@ -327,9 +338,9 @@ def run_mitm_simulation(p: int, g: int, a: int, b: int, c: int):
     return K_alice, K_bob, K_mal_alice, K_mal_bob
 
 
-
-# Mô Phỏng Phòng Thủ: SAS Và Chữ Ký Số
-
+# ==============================================================================
+# 6. MÔ PHỎNG PHÒNG THỦ: SAS VÀ CHỮ KÝ SỐ (nhận tham số từ phần nhập)
+# ==============================================================================
 
 def run_defense_simulation(p: int, g: int, a: int, b: int, c: int):
     A, B = mod_exp(g, a, p), mod_exp(g, b, p)
@@ -363,9 +374,9 @@ def run_defense_simulation(p: int, g: int, a: int, b: int, c: int):
         print(f"                   Bob kiểm tra (M = {M}, chữ ký cũ): {ok_gia}  -> từ chối, phát hiện MITM")
 
 
-
-# Input
-
+# ==============================================================================
+# 7. LUỒNG NHẬP CHÍNH
+# ==============================================================================
 
 def kiem_tra_khoa_cong_khai(ten: str, y: int, p: int) -> bool:
     """In kết quả validate_pub; nếu không hợp lệ thì giải thích vì sao phải dừng."""
