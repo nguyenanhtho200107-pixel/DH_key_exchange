@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.idea/
+.vscode/
+# tệp sinh ra khi chạy demo mã hoá
+samples/*.enc
+samples/*_khoi_phuc.*
