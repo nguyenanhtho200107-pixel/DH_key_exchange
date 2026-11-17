@@ -1,5 +1,5 @@
 """
-Bộ kiểm thử cho core/dh.py (phần Lead).
+Bộ kiểm thử cho core/dh.py .
 
 Quy ước: hashlib, sympy, mpmath và pow() ba tham số CHỈ được dùng trong tests/ để đối chiếu.
 Ba lớp kiểm thử: (1) ca tự viết TC1-TC5, (2) test biên, (3) đối chiếu chuẩn (RFC, pow, hashlib, sympy).
