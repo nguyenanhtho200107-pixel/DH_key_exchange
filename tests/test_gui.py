@@ -1,5 +1,6 @@
 """
-Kiểm thử app/gui.py : kiểm tra tham số, luồng chạy nền, các job demo.
+Kiểm thử app/gui.py: kiểm tra tham số (Mục 1, 2, 4, 5, 6), luồng chạy nền, các job demo,
+tab "Mô phỏng Trao đổi 2 bên" (hàm thuần sim_* và các hàm _sim_*), hiển thị ảnh, chọn tệp.
 
 Các test KHÔNG mở cửa sổ thật: đối tượng giao diện được dựng bằng object.__new__ với ô nhập giả,
 nên chạy được cả khi máy không có màn hình. Nếu máy không có tkinter thì dùng tkinter giả tối thiểu.
@@ -42,6 +43,7 @@ def _cai_tkinter_gia_neu_thieu():
         setattr(tk, ten, gia_tri)
     ttk = types.ModuleType("tkinter.ttk")
     ttk.Notebook = W
+    ttk.Combobox = W
     mb, fd = types.ModuleType("tkinter.messagebox"), types.ModuleType("tkinter.filedialog")
     tk.ttk, tk.messagebox, tk.filedialog = ttk, mb, fd
     sys.modules.update({"tkinter": tk, "tkinter.ttk": ttk, "tkinter.messagebox": mb, "tkinter.filedialog": fd})
@@ -54,11 +56,16 @@ from core import dh  # noqa: E402
 
 # ---------------------------------------------------------------- ĐỒ GIẢ
 class Var:
+    """StringVar giả (có cả get và set)."""
+
     def __init__(self, v):
         self.v = str(v)
 
     def get(self):
         return self.v
+
+    def set(self, v):
+        self.v = str(v)
 
 
 class ManHinh:
@@ -94,6 +101,14 @@ class Tab:
 
 
 @pytest.fixture
+def thu_muc_tam(tmp_path, monkeypatch):
+    """Chạy test trong thư mục tạm: code ghi vào samples/ và docs/ theo đường dẫn tương đối.
+    (Nếu tests/conftest.py đã có fixture cùng tên thì có thể xoá đoạn này.)"""
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+@pytest.fixture
 def hop_thoai(monkeypatch):
     """Bắt các hộp thoại: danh sách (loại, nội dung)."""
     ds = []
@@ -113,8 +128,24 @@ def tao():
         o._busy, o._q, o._on_done = False, queue.Queue(), None
         o._action_buttons = [Nut(), Nut()]
         o.lbl_status = Nut()
+        o.lbl_img_canvas, o.lbl_img_status = Nut(), Nut()
+        o._img_ref = None
         o.after = lambda *a, **k: None
-        o.da_goi_async = []
+        return o
+    return _tao
+
+
+@pytest.fixture
+def tao_sim():
+    """Giao diện giả cho tab Mô phỏng: các ô nhập/hiển thị là Var giả, nhật ký là ManHinh giả."""
+    def _tao(p=23, g=5, a=6, b=15):
+        o = object.__new__(G.DiffieHellmanGUI)
+        o.sim_p, o.sim_g, o.sim_a, o.sim_b = Var(p), Var(g), Var(a), Var(b)
+        o.sim_preset = Var("(p = 23, g = 5)")
+        for ten in ("sim_A_pub", "sim_B_pub", "sim_A_recv", "sim_B_recv", "sim_Ka", "sim_Kb"):
+            setattr(o, ten, Var(""))
+        o.sim_log = ManHinh()
+        o._sim = {"A": None, "B": None}
         return o
     return _tao
 
@@ -253,12 +284,25 @@ class TestNutBam:
             getattr(o, ten)()
             assert goi == [(1, None)], ten
 
+    def test_muc_3_goi_run_async_mot_job(self, tao):
+        o = tao()
+        goi = []
+        o._run_async = lambda jobs, on_done=None: goi.append((len(jobs), on_done))
+        o.run_muc_3()
+        assert goi == [(1, None)]
+
     def test_muc_2_dung_khoa_2048(self, tao, hop_thoai):
         o = tao(a=7, b=9, c="")                       # c trống không ảnh hưởng Mục 2
         goi = []
         o._run_async = lambda jobs, on_done=None: goi.append(jobs)
         o.run_muc_2()
         assert len(goi) == 1 and not hop_thoai
+
+    def test_muc_2_khoa_sai_khong_chay(self, tao, hop_thoai):
+        o = tao(a=1)
+        o._run_async = lambda *a, **k: pytest.fail("không được chạy khi khoá sai")
+        o.run_muc_2()
+        assert hop_thoai
 
     def test_muc_1_khong_can_c(self, tao, hop_thoai):
         o = tao(c="")
@@ -395,7 +439,7 @@ class TestLuongNen:
         assert da_chay == ["on_done"]                     # nhưng vẫn mở khoá nút và gọi on_done
         assert not o._busy
 
-    def test_khong_chay_hai_mục_cung_luc(self, tao, hop_thoai):
+    def test_khong_chay_hai_muc_cung_luc(self, tao, hop_thoai):
         o = tao()
         o._busy = True
         da_chay = []
@@ -432,6 +476,15 @@ class TestLuongNen:
         o._q.put(("done",))
         o._drain_queue()
         assert dem == [1]
+
+    def test_set_busy_khoa_va_mo_nut(self, tao):
+        o = tao()
+        o._set_busy(True)
+        assert o._busy and all(b.state == "disabled" for b in o._action_buttons)
+        assert "Đang chạy" in o.lbl_status.text
+        o._set_busy(False)
+        assert not o._busy and all(b.state == "normal" for b in o._action_buttons)
+        assert o.lbl_status.text == ""
 
 
 # ---------------------------------------------------------------- 4. CÁC JOB DEMO
@@ -474,8 +527,13 @@ class TestJob:
         assert "LỆCH, phát hiện MITM" in out and "chữ ký cũ): False" in out
 
     def test_job_6(self):
+        # kiểm tra tính chất thay vì cứng giá trị: a tìm được phải thoả g^a = A (mod p)
         out = chay_job(G.DiffieHellmanGUI._job_muc_6(10007, 5, 6518))
-        assert "a = 6919" in out and f"= {pow(5, 6919, 10007)}" in out
+        m = re.search(r"khóa riêng a = (\d+)", out)
+        assert m, out
+        a = int(m.group(1))
+        assert pow(5, a, 10007) == 6518
+        assert f"= {pow(5, a, 10007)}" in out
 
     def test_job_6_khong_nghiem(self):
         assert "Không tồn tại" in chay_job(G.DiffieHellmanGUI._job_muc_6(23, 2, 5))
@@ -489,7 +547,388 @@ class TestJob:
         assert "MỤC 8" in out and os.path.exists(os.path.join("docs", "benchmark.csv"))
 
 
-# ---------------------------------------------------------------- 5. HIỂN THỊ ẢNH VÀ QUY ƯỚC
+# ---------------------------------------------------------------- 5. TAB MÔ PHỎNG: HÀM THUẦN
+class TestSimHamThuan:
+    def test_kiem_tra_khoa_hop_le(self):
+        assert G.sim_kiem_tra_khoa(23, 5, 6, "a") == (8, None)
+        assert G.sim_kiem_tra_khoa(23, 5, 2, "a") == (2, None)           # khoá nhỏ nhất
+        assert G.sim_kiem_tra_khoa(23, 5, 21, "a") == (pow(5, 21, 23), None)   # khoá lớn nhất p-2
+
+    @pytest.mark.parametrize("k", [-1, 0, 1, 22, 23, 100])
+    def test_kiem_tra_khoa_ngoai_khoang(self, k):
+        y, loi = G.sim_kiem_tra_khoa(23, 5, k, "a")
+        assert y is None and loi and "phải nằm trong" in loi
+
+    def test_kiem_tra_khoa_cho_khoa_cong_khai_yeu(self):
+        y, loi = G.sim_kiem_tra_khoa(23, 5, 11, "a")                     # A = 5^11 = 22 = p-1
+        assert y is None and "ngoài" in loi
+        y, loi = G.sim_kiem_tra_khoa(5, 2, 2, "b")                       # 2^2 = 4 = p-1
+        assert y is None and loi
+
+    def test_kiem_tra_khoa_ten_xuat_hien_trong_loi(self):
+        _, loi = G.sim_kiem_tra_khoa(23, 5, 0, "a (Bên A)")
+        assert "a (Bên A)" in loi
+
+    def test_khoa_hop_le(self):
+        assert G.sim_khoa_hop_le(23, 5, 6) == 6
+        assert G.sim_khoa_hop_le(23, 5, 6, tranh=6) == 2                 # nhỏ nhất hợp lệ, khác 6
+        assert G.sim_khoa_hop_le(23, 5, 11) == 2                         # 11 cho A = p-1 nên bị bỏ
+        assert G.sim_khoa_hop_le(23, 5, 99) == 2                         # ngoài khoảng
+        assert G.sim_khoa_hop_le(23, 5) == 2                             # không mong muốn gì
+
+    def test_khoa_hop_le_p_rat_nho(self):
+        # p = 5, g = 2: chỉ k = 3 hợp lệ (k = 2 cho A = 4 = p-1)
+        assert G.sim_khoa_hop_le(5, 2) == 3
+        assert G.sim_khoa_hop_le(5, 2, 3, tranh=3) == 3                  # không còn lựa chọn khác thì vẫn trả về 3
+
+    def test_khoa_hop_le_khong_co_khoa_nao(self):
+        assert G.sim_khoa_hop_le(3, 2) is None                           # [2, p-2] rỗng
+
+    def test_cap_khoa_mac_dinh(self):
+        assert G.sim_cap_khoa_mac_dinh(23, 5) == (6, 15)
+
+    @pytest.mark.parametrize("p,g", [(5, 2), (7, 3), (13, 2), (23, 5), (29, 2)])
+    def test_cap_khoa_mac_dinh_cac_preset(self, p, g):
+        a, b = G.sim_cap_khoa_mac_dinh(p, g)
+        assert a is not None and b is not None
+        assert G.sim_kiem_tra_khoa(p, g, a, "a")[1] is None
+        assert G.sim_kiem_tra_khoa(p, g, b, "b")[1] is None
+        K = pow(pow(g, a, p), b, p)
+        assert K not in (1, p - 1)                                       # khoá chung không tầm thường
+
+    def test_cap_khoa_mac_dinh_khong_co_khoa(self):
+        assert G.sim_cap_khoa_mac_dinh(3, 2) == (None, None)
+
+    def test_cap_khoa_mac_dinh_uu_tien_a_b_khac_nhau(self):
+        a, b = G.sim_cap_khoa_mac_dinh(23, 5)
+        assert a != b
+
+    @pytest.mark.parametrize("p,g", [(23, 5), (5, 2), (7, 3), (101, 2)])
+    def test_khoa_ngau_nhien_luon_hop_le(self, p, g):
+        for _ in range(30):
+            k = G.sim_khoa_ngau_nhien(p, g)
+            assert k is not None
+            assert G.sim_kiem_tra_khoa(p, g, k, "a")[1] is None
+
+
+# ---------------------------------------------------------------- 6. TAB MÔ PHỎNG: GIAO DIỆN
+class TestSimGetPg:
+    def test_hop_le(self, tao_sim, hop_thoai):
+        assert tao_sim()._sim_get_pg() == (23, 5)
+        assert hop_thoai == []
+
+    @pytest.mark.parametrize("p,g", [("abc", 5), (23, "xyz"), ("", 5), (23, ""), ("2.5", 5)])
+    def test_khong_phai_so_nguyen(self, p, g, tao_sim, hop_thoai):
+        assert tao_sim(p=p, g=g)._sim_get_pg() is None
+        assert len(hop_thoai) == 1 and hop_thoai[0][0] == "showerror"
+
+    @pytest.mark.parametrize("p", [24, 3, 1, 0, -7, 15])
+    def test_p_khong_hop_le(self, p, tao_sim, hop_thoai):
+        assert tao_sim(p=p, g=2)._sim_get_pg() is None
+        assert len(hop_thoai) == 1 and hop_thoai[0][0] == "showwarning"
+        assert "p" in hop_thoai[0][1]
+
+    @pytest.mark.parametrize("g", [1, 0, -1, 23, 24])
+    def test_g_ngoai_khoang(self, g, tao_sim, hop_thoai):
+        assert tao_sim(g=g)._sim_get_pg() is None
+        assert len(hop_thoai) == 1 and hop_thoai[0][0] == "showwarning"
+
+    def test_g_khong_phai_can_nguyen_thuy(self, tao_sim, hop_thoai):
+        assert tao_sim(g=2)._sim_get_pg() is None                        # 2 không phải căn nguyên thuỷ mod 23
+        assert len(hop_thoai) == 1 and "KHÔNG phải" in hop_thoai[0][1]
+
+
+class TestSimKiemTraPG:
+    def test_kiem_tra_p_hop_le(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_check_p()
+        assert hop_thoai[-1][0] == "showinfo" and "số nguyên tố hợp lệ" in o.sim_log.t
+
+    def test_kiem_tra_p_hop_so(self, tao_sim, hop_thoai):
+        o = tao_sim(p=24)
+        o._sim_check_p()
+        assert hop_thoai[-1][0] == "showwarning" and "KHÔNG phải số nguyên tố" in o.sim_log.t
+
+    def test_kiem_tra_p_nho_hon_5(self, tao_sim, hop_thoai):
+        tao_sim(p=3)._sim_check_p()
+        assert hop_thoai[-1][0] == "showwarning"
+
+    def test_kiem_tra_p_khong_phai_so(self, tao_sim, hop_thoai):
+        tao_sim(p="abc")._sim_check_p()
+        assert hop_thoai[-1][0] == "showerror"
+
+    def test_kiem_tra_g_hop_le(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_check_g()
+        assert len(hop_thoai) == 1 and hop_thoai[0][0] == "showinfo"
+        assert "phần tử sinh" in hop_thoai[0][1] and "[Kiểm tra g]" in o.sim_log.t
+
+    def test_kiem_tra_g_sai_chi_mot_hop_thoai(self, tao_sim, hop_thoai):
+        o = tao_sim(g=2)
+        o._sim_check_g()
+        assert len(hop_thoai) == 1 and hop_thoai[0][0] == "showwarning"
+
+
+class TestSimKhoaNgauNhien:
+    def test_dien_khoa_hop_le(self, tao_sim, hop_thoai):
+        o = tao_sim(a=0, b=0)
+        o._sim_rand("A")
+        o._sim_rand("B")
+        for ten, var in (("a", o.sim_a), ("b", o.sim_b)):
+            assert G.sim_kiem_tra_khoa(23, 5, int(var.get()), ten)[1] is None
+        assert hop_thoai == []
+
+    def test_pg_sai_khong_doi_khoa(self, tao_sim, hop_thoai):
+        o = tao_sim(p=24)
+        o._sim_rand("A")
+        assert o.sim_a.get() == "6" and len(hop_thoai) == 1
+
+
+class TestSimTraoDoi:
+    def test_trao_doi_ca_hai_ben(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_exchange_both()
+        K = pow(pow(5, 15, 23), 6, 23)
+        assert (o.sim_A_pub.get(), o.sim_B_pub.get()) == ("8", "19")
+        assert (o.sim_A_recv.get(), o.sim_B_recv.get()) == ("8", "19")
+        assert o.sim_Ka.get() == o.sim_Kb.get() == str(K) == "2"
+        assert "Hoàn tất" in o.sim_log.t and "SAS" in o.sim_log.t
+        assert hop_thoai == []
+
+    def test_khoa_sai_chi_mot_hop_thoai_va_khong_gui(self, tao_sim, hop_thoai):
+        o = tao_sim(a=22, b=0)
+        o._sim_exchange_both()
+        assert len(hop_thoai) == 1 and hop_thoai[0][0] == "showwarning"
+        dong_loi = [d for d in hop_thoai[0][1].splitlines() if d.startswith("- ")]
+        assert len(dong_loi) == 2                                        # a = 22 và b = 0
+        assert o._sim == {"A": None, "B": None}
+        assert o.sim_A_pub.get() == "" and o.sim_Ka.get() == ""
+
+    def test_mot_ben_sai_thi_ben_dung_cung_khong_duoc_gui(self, tao_sim, hop_thoai):
+        o = tao_sim(a=6, b=22)
+        o._sim_exchange_both()
+        assert len(hop_thoai) == 1
+        assert o._sim["A"] is None and o._sim["B"] is None
+        assert o.sim_A_pub.get() == ""
+
+    def test_khoa_cong_khai_bang_p_tru_1(self, tao_sim, hop_thoai):
+        o = tao_sim(a=11)                                                # A = p-1
+        o._sim_exchange_both()
+        assert len(hop_thoai) == 1 and "ngoài" in hop_thoai[0][1]
+        assert o._sim["A"] is None
+
+    def test_khoa_khong_phai_so(self, tao_sim, hop_thoai):
+        o = tao_sim(a="abc")
+        o._sim_exchange_both()
+        assert len(hop_thoai) == 1 and hop_thoai[0][0] == "showerror"
+        o2 = tao_sim(b="")
+        o2._sim_exchange_both()
+        assert hop_thoai[-1][0] == "showerror" and o2._sim["A"] is None
+
+    def test_pg_sai_thi_khong_gui(self, tao_sim, hop_thoai):
+        o = tao_sim(p=24)
+        o._sim_exchange_both()
+        assert len(hop_thoai) == 1 and o._sim["A"] is None
+
+    def test_gui_rieng_tung_ben_chua_co_khoa_chung(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_send_a()
+        assert o.sim_A_pub.get() == "8" and o.sim_B_pub.get() == ""
+        assert o.sim_Ka.get() == "" and o.sim_Kb.get() == ""
+        assert o._sim["A"] == {"p": 23, "g": 5, "k": 6, "pub": 8} and o._sim["B"] is None
+        assert hop_thoai == []
+
+    def test_gui_lan_luot_a_roi_b(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_send_a()
+        o._sim_send_b()
+        assert o.sim_Ka.get() == o.sim_Kb.get() == "2"
+
+    def test_gui_lan_luot_b_roi_a(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_send_b()
+        assert o.sim_Ka.get() == ""
+        o._sim_send_a()
+        assert o.sim_Ka.get() == o.sim_Kb.get() == "2"
+
+    def test_gui_khoa_sai_tung_ben(self, tao_sim, hop_thoai):
+        o = tao_sim(a=22)
+        o._sim_send_a()
+        assert hop_thoai[-1][0] == "showwarning" and o._sim["A"] is None
+        o2 = tao_sim(b=1)
+        o2._sim_send_b()
+        assert hop_thoai[-1][0] == "showwarning" and o2._sim["B"] is None
+        o3 = tao_sim(a="x")
+        o3._sim_send_a()
+        assert hop_thoai[-1][0] == "showerror"
+
+    def test_nho_khoa_rieng_da_gui_khong_lan_voi_o_nhap(self, tao_sim, hop_thoai):
+        # gửi A với a = 6, sau đó sửa ô nhập a = 7 rồi mới gửi B: khoá chung vẫn tính theo a = 6 đã gửi
+        o = tao_sim()
+        o._sim_send_a()
+        o.sim_a.set(7)
+        o._sim_send_b()
+        K = pow(pow(5, 15, 23), 6, 23)
+        assert o.sim_Ka.get() == o.sim_Kb.get() == str(K)
+
+    def test_doi_pg_giua_hai_lan_gui_xoa_ket_qua_cu(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_send_a()
+        assert o._sim["A"]["p"] == 23
+        o.sim_p.set(29)
+        o.sim_g.set(2)
+        o.sim_b.set(3)
+        o._sim_send_b()
+        assert o._sim["A"] is None and o._sim["B"]["p"] == 29
+        assert o.sim_A_pub.get() == "" and o.sim_A_recv.get() == ""
+        assert o.sim_Ka.get() == "" and o.sim_Kb.get() == ""
+        assert "xóa kết quả cũ" in o.sim_log.t
+        assert hop_thoai == []
+
+    def test_trao_doi_lai_voi_pg_moi(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_exchange_both()
+        o.sim_p.set(29)
+        o.sim_g.set(2)
+        o.sim_a.set(6)
+        o.sim_b.set(15)
+        o._sim_exchange_both()
+        K = pow(pow(2, 15, 29), 6, 29)
+        assert o.sim_Ka.get() == o.sim_Kb.get() == str(K)
+        assert o._sim["A"]["p"] == o._sim["B"]["p"] == 29
+        assert hop_thoai == []
+
+    def test_canh_bao_khoa_chung_yeu(self, tao_sim, hop_thoai):
+        # p = 5, g = 2: chỉ có khoá 3; khoá chung = 3^3 mod 5 = 2 nên không yếu, kiểm tra ca không cảnh báo
+        o = tao_sim(p=5, g=2, a=3, b=3)
+        o._sim_exchange_both()
+        assert o.sim_Ka.get() == o.sim_Kb.get() == str(pow(pow(2, 3, 5), 3, 5))
+        assert "Cảnh báo" not in o.sim_log.t
+
+    def test_sim_state_dung_chung_mot_dict(self, tao_sim):
+        o = tao_sim()
+        assert o._sim_state() is o._sim
+
+    def test_sim_state_tu_tao_neu_thieu(self):
+        o = object.__new__(G.DiffieHellmanGUI)
+        assert o._sim_state() == {"A": None, "B": None}
+
+
+class TestSimDatLaiVaPreset:
+    def test_reset_ve_mac_dinh(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_exchange_both()
+        o.sim_p.set(29)
+        o.sim_g.set(2)
+        o.sim_a.set(9)
+        o.sim_b.set(10)
+        o._sim_reset()
+        assert o._sim == {"A": None, "B": None}
+        assert (o.sim_p.get(), o.sim_g.get(), o.sim_a.get(), o.sim_b.get()) == ("23", "5", "6", "15")
+        assert o.sim_preset.get() == "(p = 23, g = 5)"
+        for ten in ("sim_A_pub", "sim_B_pub", "sim_A_recv", "sim_B_recv", "sim_Ka", "sim_Kb"):
+            assert getattr(o, ten).get() == "", ten
+        assert "làm mới" in o.sim_log.t and "Hoàn tất" not in o.sim_log.t
+
+    def test_reset_giu_pg(self, tao_sim, hop_thoai):
+        o = tao_sim(p=29, g=2, a=9, b=10)
+        o._sim_reset(keep_pg=True)
+        assert (o.sim_p.get(), o.sim_g.get(), o.sim_a.get(), o.sim_b.get()) == ("29", "2", "9", "10")
+        assert o._sim == {"A": None, "B": None}
+
+    def test_chon_preset_dien_pg_va_khoa_hop_le(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o.sim_preset.set("(p = 29, g = 2)")
+        o._sim_on_preset()
+        assert (o.sim_p.get(), o.sim_g.get()) == ("29", "2")
+        assert G.sim_kiem_tra_khoa(29, 2, int(o.sim_a.get()), "a")[1] is None
+        assert G.sim_kiem_tra_khoa(29, 2, int(o.sim_b.get()), "b")[1] is None
+        assert "p = 29" in o.sim_log.t
+
+    @pytest.mark.parametrize("p,g", [(5, 2), (7, 3), (13, 2), (23, 5), (29, 2)])
+    def test_moi_preset_trao_doi_duoc(self, p, g, tao_sim, hop_thoai):
+        o = tao_sim()
+        o.sim_preset.set(f"(p = {p}, g = {g})")
+        o._sim_on_preset()
+        o._sim_exchange_both()
+        assert hop_thoai == []
+        assert o.sim_Ka.get() == o.sim_Kb.get() != ""
+
+    def test_chon_preset_xoa_ket_qua_cu(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o._sim_exchange_both()
+        o.sim_preset.set("(p = 7, g = 3)")
+        o._sim_on_preset()
+        assert o._sim == {"A": None, "B": None} and o.sim_Ka.get() == ""
+
+    def test_preset_rac_khong_lam_gi(self, tao_sim, hop_thoai):
+        o = tao_sim()
+        o.sim_preset.set("khong co so")
+        o._sim_on_preset()
+        assert (o.sim_p.get(), o.sim_g.get()) == ("23", "5")
+
+    def test_dat_khoa_mac_dinh_p_nho(self, tao_sim):
+        o = tao_sim(p=7, g=3, a=99, b=99)
+        o._sim_dat_khoa_mac_dinh(7, 3)
+        assert G.sim_kiem_tra_khoa(7, 3, int(o.sim_a.get()), "a")[1] is None
+        assert G.sim_kiem_tra_khoa(7, 3, int(o.sim_b.get()), "b")[1] is None
+
+    def test_doc_khoa(self, tao_sim, hop_thoai):
+        o = tao_sim(a=" 12 ")
+        assert o._sim_doc_khoa(o.sim_a, "a") == 12
+        o.sim_a.set("abc")
+        assert o._sim_doc_khoa(o.sim_a, "a") is None
+        assert hop_thoai[-1][0] == "showerror"
+
+
+# ---------------------------------------------------------------- 7. MÀN HÌNH, ẢNH, CHỌN TỆP
+class TestManHinh:
+    def test_clear_output(self, tao):
+        o = tao()
+        o.txt_out.t = "nội dung cũ"
+        o.clear_output()
+        assert o.txt_out.t == ""
+
+    def test_hien_loi_truc_tiep(self, tao, hop_thoai):
+        o = tao()
+        o._hien_loi(["- loi mot", "- loi hai"])
+        assert "KIỂM TRA THAM SỐ THẤT BẠI" in o.txt_out.t
+        assert "loi mot" in o.txt_out.t and "loi hai" in o.txt_out.t
+        assert o.notebook.da_chon == [0]
+        assert hop_thoai[0][0] == "showwarning" and "loi mot" in hop_thoai[0][1] and "loi hai" in hop_thoai[0][1]
+
+    def test_loi_chao_mung(self, tao):
+        o = tao()
+        o._write_welcome()
+        assert "SẴN SÀNG THUYẾT TRÌNH" in o.txt_out.t and "CHẠY TỰ ĐỘNG TOÀN BỘ" in o.txt_out.t
+
+    def test_ban_ro_mac_dinh_khi_trong(self, tao):
+        assert tao(tin="   ")._ban_ro() == "Xin chao Thay Co! Demo Diffie-Hellman NEU."
+
+    def test_ban_ro_cat_khoang_trang(self, tao):
+        assert tao(tin="  xin chao  ")._ban_ro() == "xin chao"
+
+    def test_muc_4_dung_tin_mac_dinh_khi_trong(self, tao):
+        o = tao(tin="")
+        goi = []
+        o._run_async = lambda jobs, on_done=None: goi.append(jobs)
+        o.run_muc_4()
+        assert len(goi) == 1
+
+
+class _AnhGia:
+    """PhotoImage giả: có width() và subsample()."""
+
+    def __init__(self, file=None, rong=1000):
+        self.file, self.rong = file, rong
+
+    def width(self):
+        return self.rong
+
+    def subsample(self, x, y):
+        return _AnhGia(self.file, self.rong // x)
+
+
 class TestHienThiAnh:
     def test_thieu_tep_bao_cho_nguoi_dung(self, tao, hop_thoai):
         tao().show_image(os.path.join("khong", "co.png"))
@@ -500,7 +939,73 @@ class TestHienThiAnh:
         o._hien_bieu_do()
         assert hop_thoai == []                              # chưa có docs/benchmark.png thì im lặng
 
+    def test_hien_bieu_do_goi_show_image_khi_co_tep(self, tao, thu_muc_tam):
+        os.makedirs("docs")
+        with open(os.path.join("docs", "benchmark.png"), "wb") as f:
+            f.write(b"x")
+        o = tao()
+        ghi = []
+        o.show_image = ghi.append
+        o._hien_bieu_do()
+        assert ghi == [os.path.join("docs", "benchmark.png")]
 
+    def test_show_image_thanh_cong_anh_rong_thu_nho(self, tao, thu_muc_tam, hop_thoai, monkeypatch):
+        monkeypatch.setattr(G.tk, "PhotoImage", lambda file=None: _AnhGia(file, 1000))
+        with open("a.png", "wb") as f:
+            f.write(b"x")
+        o = tao()
+        o.show_image("a.png")
+        assert hop_thoai == []
+        assert o.notebook.da_chon == [1]
+        assert o._img_ref.width() == 500                    # > 760 px thì thu nhỏ một nửa
+        assert "Đang hiển thị" in o.lbl_img_status.text and "a.png" in o.lbl_img_status.text
+
+    def test_show_image_anh_nho_giu_nguyen(self, tao, thu_muc_tam, hop_thoai, monkeypatch):
+        monkeypatch.setattr(G.tk, "PhotoImage", lambda file=None: _AnhGia(file, 400))
+        with open("b.png", "wb") as f:
+            f.write(b"x")
+        o = tao()
+        o.show_image("b.png")
+        assert o._img_ref.width() == 400
+
+    def test_show_image_loi_doc_anh(self, tao, thu_muc_tam, hop_thoai, monkeypatch):
+        def hong(file=None):
+            raise RuntimeError("anh hong")
+        monkeypatch.setattr(G.tk, "PhotoImage", hong)
+        with open("c.png", "wb") as f:
+            f.write(b"x")
+        tao().show_image("c.png")
+        assert hop_thoai[0][0] == "showerror" and "anh hong" in hop_thoai[0][1]
+
+
+class TestChonTepTuyY:
+    def test_chon_tep_chay_demo_file(self, tao, monkeypatch):
+        monkeypatch.setattr(G.filedialog, "askopenfilename", lambda **k: "duong/dan/tep.txt", raising=False)
+        ghi_demo = []
+        monkeypatch.setattr(G, "demo_file", ghi_demo.append)
+        o = tao()
+        goi = []
+        o._run_async = lambda jobs, on_done=None: goi.append(jobs)
+        o.choose_custom_file()
+        assert len(goi) == 1 and len(goi[0]) == 1
+        goi[0][0]()                                          # chạy job thì gọi demo_file đúng đường dẫn
+        assert ghi_demo == ["duong/dan/tep.txt"]
+
+    def test_huy_chon_tep_khong_chay(self, tao, monkeypatch):
+        monkeypatch.setattr(G.filedialog, "askopenfilename", lambda **k: "", raising=False)
+        o = tao()
+        o._run_async = lambda *a, **k: pytest.fail("không được chạy khi huỷ chọn tệp")
+        o.choose_custom_file()
+
+    def test_dang_ban_thi_khong_mo_hop_thoai_chon_tep(self, tao, monkeypatch):
+        monkeypatch.setattr(G.filedialog, "askopenfilename",
+                            lambda **k: pytest.fail("không được mở hộp thoại khi đang chạy"), raising=False)
+        o = tao()
+        o._busy = True
+        o.choose_custom_file()
+
+
+# ---------------------------------------------------------------- 8. QUY ƯỚC
 class TestQuyUoc:
     def _ma_nguon(self):
         with open(G.__file__, encoding="utf-8") as f:
