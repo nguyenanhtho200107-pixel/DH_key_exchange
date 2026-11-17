@@ -1,5 +1,5 @@
 """
-Kiểm thử app/gui.py (phần CLI): kiểm tra tham số, luồng chạy nền, các job demo.
+Kiểm thử app/gui.py : kiểm tra tham số, luồng chạy nền, các job demo.
 
 Các test KHÔNG mở cửa sổ thật: đối tượng giao diện được dựng bằng object.__new__ với ô nhập giả,
 nên chạy được cả khi máy không có màn hình. Nếu máy không có tkinter thì dùng tkinter giả tối thiểu.
