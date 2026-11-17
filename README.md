@@ -136,8 +136,15 @@ DH_key_exchange/
 
 ---
 
-## 🤝 Đóng góp, Quy tắc Git & Giấy phép
+## 🤝 Đóng góp, Quy tắc Git 
 
 * **Quy tắc làm việc nhóm:** Không đẩy trực tiếp (`push`) lên nhánh `main` nếu chưa kiểm thử; tạo nhánh mới (`feat/...`, `fix/...`, `docs/...`) và mở **Pull Request** để thành viên phụ trách phân hệ xem xét trước khi gộp.
 * **Báo lỗi & Trợ giúp:** Nếu gặp vấn đề trong quá trình cài đặt hoặc chạy thử nghiệm, vui lòng mở một yêu cầu mới tại mục **[Issues](../../issues)** của repository.
-* **Giấy phép:** Dự án được phân phối dưới giấy phép **MIT License** — xem chi tiết tại tệp [LICENSE](LICENSE).
+
+---
+
+## ⚠️ Lưu ý bảo mật & Giới hạn học thuật
+
+* **Chữ ký số RSA trong phòng thủ MITM:** Khóa RSA sử dụng kích thước **64-bit** nhằm mục đích minh họa cơ chế xác thực, không đảm bảo an toàn trong môi trường thực tế.
+* **Mã hóa dòng (`core/stream.py`):** Thuật toán mã hóa dòng chỉ phục vụ minh họa nguyên lý kết hợp khóa phiên, chưa tích hợp cơ chế xác thực toàn vẹn thông điệp (MAC/AEAD).
+* **Kích thước tham số nguyên tố ($p$):** Các bộ tham số nhỏ (p = 23, p từ 32 đến 40 bit) chỉ dùng cho mục đích học tập và thử nghiệm thuật toán giải logarit rời rạc; triển khai thực tế bắt buộc sử dụng p >= 2048 bít (như các nhóm tiêu chuẩn **RFC 3526**).
