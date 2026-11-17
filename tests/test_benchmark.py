@@ -1,5 +1,5 @@
 """
-Kiểm thử app/benchmark.py (phần CLI): đo BSGS 16-36 bit, xuất CSV và biểu đồ, ngoại suy 2048-bit.
+Kiểm thử app/benchmark.py : đo BSGS 16-36 bit, xuất CSV và biểu đồ, ngoại suy 2048-bit.
 Mọi tệp được ghi trong thư mục tạm; sympy chỉ dùng để đối chiếu số nguyên tố.
 """
 import csv
