@@ -129,7 +129,7 @@ DH_key_exchange/
 | Thành viên | Vai trò | Phân hệ phụ trách |
 | :--- | :--- | :--- |
 | **Nguyễn Anh Thơ** | **Nhóm trưởng (Lead) & Core DH** | Thiết kế kiến trúc repo, [core/\_\_init\_\_.py](core/__init__.py)  và các phần 1,2,3 trong [core/dh.py](core/dh.py) (`mod_exp`, SHA-256 tự viết, Miller-Rabin, nhóm RFC 3526, SAS & chữ ký số RSA). |
-| **Nguyễn Phúc Quang** | **Phát triển thuật toán DLOG & Stream** | Cài đặt [core/dlog.py](core/dlog.py) (Vét cạn, BSGS, Pohlig–Hellman), [core/stream.py](core/stream.py) (mã hóa dòng LCG-XOR) và các phần 4,5,6,7 trong [core/dh.py](core/dh.py). |
+| **Nguyễn Phúc Quang** | **Phát triển thuật toán DLOG & Stream** | Cài đặt [core/dlog.py](core/dlog.py) (Vét cạn, BSGS, Pohlig–Hellman), [core/stream.py](core/stream.py) (mã hóa dòng LCG-XOR) và các phần 4,5,6,7 trong [core/dh.py](core/dh.py) (nhập tham số dùng chung, mô phỏng tấn công & phòng thủ MITM, luồng nhập chính). |
 | **Phạm Quang Minh** | **Phát triển Ứng dụng (GUI & CLI)** | Xây dựng [app/gui.py](app/gui.py), [app/cli.py](app/cli.py), xử lý tệp [app/filecrypt.py](app/filecrypt.py) và biểu đồ [app/benchmark.py](app/benchmark.py). |
 | **Hoàng Anh Tuấn** | **Kiểm thử & Đảm bảo chất lượng (QA)** | Xây dựng bộ kiểm thử đơn vị `pytest` và trình báo cáo 28 ca đối chiếu trong thư mục [tests/](tests/). |
 
