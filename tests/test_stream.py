@@ -1,5 +1,5 @@
 """
-Kiểm thử core/stream.py (phần Dev): mã dòng dùng SHA-256 tự viết ở chế độ đếm.
+Kiểm thử core/stream.py : mã dòng dùng SHA-256 tự viết ở chế độ đếm.
 
 Cấu trúc đang kiểm thử:
     dk        = SHA256("DH-STREAM-KDF-v1|" || bytes(K))
