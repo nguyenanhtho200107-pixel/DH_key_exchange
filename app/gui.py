@@ -15,6 +15,7 @@ import contextlib
 import io
 import os
 import queue
+import secrets
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -31,66 +32,15 @@ from core.dh import (
     mod_exp,
     sas_code,
     validate_dh_params,
+    validate_pub,
+    is_prime_miller_rabin,
+    la_can_nguyen_thuy,
+    canh_bao_tham_so,
     run_mitm_simulation,
     run_defense_simulation,
     RFC_3526_2048_P,
     RFC_3526_2048_G,
 )
-try:
-    from core.dh import validate_pub, is_prime_miller_rabin, la_can_nguyen_thuy, canh_bao_tham_so
-except ImportError:
-    def is_prime_miller_rabin(n: int) -> bool:
-        if n < 2:
-            return False
-        for p in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29):
-            if n == p:
-                return True
-            if n % p == 0:
-                return False
-        d, s = n - 1, 0
-        while d % 2 == 0:
-            d //= 2
-            s += 1
-        for a in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37):
-            if a >= n:
-                break
-            x = mod_exp(a, d, n)
-            if x in (1, n - 1):
-                continue
-            for _ in range(s - 1):
-                x = mod_exp(x, 2, n)
-                if x == n - 1:
-                    break
-            else:
-                return False
-        return True
-
-    def la_can_nguyen_thuy(p: int, g: int):
-        if p > 10 ** 9:
-            return None
-        phi = p - 1
-        n, factors, d = phi, set(), 2
-        while d * d <= n:
-            if n % d == 0:
-                factors.add(d)
-                while n % d == 0:
-                    n //= d
-            d += 1
-        if n > 1:
-            factors.add(n)
-        return all(mod_exp(g, phi // q, p) != 1 for q in factors)
-
-    def validate_pub(y: int, p: int, q: int = None) -> bool:
-        if not (2 <= y <= p - 2):
-            return False
-        if q is not None and mod_exp(y, q, p) != 1:
-            return False
-        return True
-
-    def canh_bao_tham_so(p: int, g: int):
-        if p.bit_length() < 512:
-            return [f"p = {p} ({p.bit_length()} bit) chỉ dùng minh họa, chưa đủ an toàn thực tế."]
-        return []
 from core.stream import encrypt_text_hex, decrypt_text_hex
 from core.dlog import dlog_bsgs, demo_eve_crack, demo_pohlig_hellman_compare
 from app.filecrypt import ensure_sample_files, demo_file, benchmark_file_encryption
@@ -113,6 +63,61 @@ def check_primitive_root(g: int, p: int):
     return False, f"g = {g} KHÔNG phải phần tử sinh nguyên thủy của Z_{p}* (chỉ sinh nhóm con)."
 
 
+
+def sim_kiem_tra_khoa(p: int, g: int, k: int, ten: str):
+    """Kiểm tra khoá riêng k của tab mô phỏng. Trả về (khoá_công_khai, lỗi); lỗi là None nếu hợp lệ.
+    Chặn cả khoá làm khoá công khai yếu (bằng p-1 hoặc ngoài [2, p-2])."""
+    if not (KHOA_TOI_THIEU <= k <= p - 2):
+        return None, f"Khóa {ten} = {k} phải nằm trong [{KHOA_TOI_THIEU}, {p - 2}]."
+    y = mod_exp(g, k, p)
+    if not validate_pub(y, p):
+        return None, (f"Khóa {ten} = {k} cho khóa công khai {y} nằm ngoài [2, {p - 2}] "
+                      f"(khóa chung chỉ còn ±1, ai cũng đoán được). Hãy chọn khóa khác.")
+    return y, None
+
+
+def sim_khoa_hop_le(p: int, g: int, mong_muon: int = None, tranh: int = None):
+    """Khoá riêng hợp lệ để điền sẵn: ưu tiên giá trị mong muốn, nếu không được thì lấy khoá hợp lệ nhỏ nhất."""
+    def ok(k):
+        return KHOA_TOI_THIEU <= k <= p - 2 and validate_pub(mod_exp(g, k, p), p)
+    if mong_muon is not None and mong_muon != tranh and ok(mong_muon):
+        return mong_muon
+    for k in range(KHOA_TOI_THIEU, p - 1):
+        if k != tranh and ok(k):
+            return k
+    for k in range(KHOA_TOI_THIEU, p - 1):        # p rất nhỏ: chỉ có một khoá hợp lệ
+        if ok(k):
+            return k
+    return None
+
+
+def sim_cap_khoa_mac_dinh(p: int, g: int, a_mong: int = 6, b_mong: int = 15):
+    """Cặp (a, b) điền sẵn: cả hai khoá công khai hợp lệ và khóa chung khác 1 và p-1 (nếu p đủ lớn để có)."""
+    def ok(k):
+        return KHOA_TOI_THIEU <= k <= p - 2 and validate_pub(mod_exp(g, k, p), p)
+    a = sim_khoa_hop_le(p, g, a_mong)
+    if a is None:
+        return None, None
+    A = mod_exp(g, a, p)
+    ung_vien = [b_mong] + list(range(KHOA_TOI_THIEU, p - 1))
+    for tranh_trung in (True, False):
+        for b in ung_vien:
+            if not ok(b) or (tranh_trung and b == a):
+                continue
+            if mod_exp(A, b, p) not in (1, p - 1):
+                return a, b
+    return a, sim_khoa_hop_le(p, g, b_mong, tranh=a)
+
+
+def sim_khoa_ngau_nhien(p: int, g: int):
+    """Khoá riêng ngẫu nhiên (secrets) trong [2, p-2] và cho khoá công khai hợp lệ."""
+    for _ in range(200):
+        k = KHOA_TOI_THIEU + secrets.randbelow(p - 3)
+        if validate_pub(mod_exp(g, k, p), p):
+            return k
+    return sim_khoa_hop_le(p, g)
+
+
 class DiffieHellmanGUI(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -126,6 +131,7 @@ class DiffieHellmanGUI(tk.Tk):
         self._q = queue.Queue()
         self._on_done = None
         self._action_buttons = []      # các nút bị khóa khi đang chạy nền
+        self._sim = {"A": None, "B": None}   # phiên trao đổi 2 bên: p, g, khóa riêng, khóa công khai đã gửi
 
         self._build_ui()
         self._write_welcome()
@@ -450,6 +456,9 @@ class DiffieHellmanGUI(tk.Tk):
         self.sim_log.insert(tk.END, msg + "\n")
         self.sim_log.see(tk.END)
 
+    def _sim_state(self):
+        return self.__dict__.setdefault("_sim", {"A": None, "B": None})
+
     def _sim_get_pg(self):
         try:
             p, g = int(self.sim_p.get().strip()), int(self.sim_g.get().strip())
@@ -468,6 +477,20 @@ class DiffieHellmanGUI(tk.Tk):
             return None
         return p, g
 
+    def _sim_doc_khoa(self, var, ten):
+        try:
+            return int(var.get().strip())
+        except ValueError:
+            messagebox.showerror("Lỗi", f"Khóa riêng {ten} phải là số nguyên!")
+            return None
+
+    def _sim_dat_khoa_mac_dinh(self, p, g):
+        a, b = sim_cap_khoa_mac_dinh(p, g)
+        if a is not None:
+            self.sim_a.set(str(a))
+        if b is not None:
+            self.sim_b.set(str(b))
+
     def _sim_on_preset(self, _event=None):
         txt = self.sim_preset.get()
         nums = [int(s) for s in txt.replace("(", "").replace(")", "").replace(",", " ").split() if s.isdigit()]
@@ -475,6 +498,7 @@ class DiffieHellmanGUI(tk.Tk):
             self.sim_p.set(str(nums[0]))
             self.sim_g.set(str(nums[1]))
             self._sim_reset(keep_pg=True)
+            self._sim_dat_khoa_mac_dinh(nums[0], nums[1])        # khóa cũ có thể không hợp lệ với p mới
             self._sim_log_add(f"• Đã chọn cặp số công khai: p = {nums[0]}, g = {nums[1]}")
 
     def _sim_check_p(self):
@@ -499,77 +523,114 @@ class DiffieHellmanGUI(tk.Tk):
             messagebox.showinfo("Hợp lệ", note_g)
 
     def _sim_rand(self, side: str):
-        import random
         pg = self._sim_get_pg()
         if not pg:
             return
-        p, _ = pg
-        val = random.randint(2, max(2, p - 2))
-        if side == "A":
-            self.sim_a.set(str(val))
-        else:
-            self.sim_b.set(str(val))
+        p, g = pg
+        val = sim_khoa_ngau_nhien(p, g)
+        if val is None:
+            return
+        (self.sim_a if side == "A" else self.sim_b).set(str(val))
 
-    def _sim_try_shared(self, p: int, g: int):
-        if self.sim_A_recv.get() and self.sim_B_recv.get():
-            a = int(self.sim_a.get().strip())
-            b = int(self.sim_b.get().strip())
-            A = int(self.sim_A_recv.get())
-            B = int(self.sim_B_recv.get())
-            Ka = mod_exp(B, a, p)
-            Kb = mod_exp(A, b, p)
-            self.sim_Ka.set(str(Ka))
-            self.sim_Kb.set(str(Kb))
-            self._sim_log_add(f"• [Hoàn tất] Alice tính K = {B}^{a} mod {p} = {Ka} | Bob tính K = {A}^{b} mod {p} = {Kb}")
-            self._sim_log_add(f"• => Khóa chung K của hai bên đều bằng {Ka} (SAS: [{sas_code(A, B, Ka)}])")
+    def _sim_xoa_ben(self, ben: str):
+        """Xoá kết quả của một bên (khi p, g đã đổi nên kết quả cũ không còn dùng được)."""
+        self._sim_state()[ben] = None
+        (self.sim_A_pub if ben == "A" else self.sim_B_pub).set("")
+        (self.sim_A_recv if ben == "A" else self.sim_B_recv).set("")
+        self.sim_Ka.set("")
+        self.sim_Kb.set("")
+
+    def _sim_ap_dung(self, ben: str, p: int, g: int, k: int, pub: int):
+        """Ghi nhận bên `ben` đã gửi khoá công khai. Nhớ p, g, khoá riêng đã dùng để về sau không lẫn với ô nhập."""
+        kia = "B" if ben == "A" else "A"
+        st = self._sim_state()
+        if st[kia] and (st[kia]["p"], st[kia]["g"]) != (p, g):
+            self._sim_xoa_ben(kia)
+            self._sim_log_add(f"• p, g đã đổi so với lần gửi trước của Bên {kia}: xóa kết quả cũ của Bên {kia}, hãy gửi lại.")
+        st[ben] = {"p": p, "g": g, "k": k, "pub": pub}
+        (self.sim_A_pub if ben == "A" else self.sim_B_pub).set(str(pub))
+        (self.sim_A_recv if ben == "A" else self.sim_B_recv).set(str(pub))
+        self.sim_Ka.set("")
+        self.sim_Kb.set("")
+        self._sim_log_add(f"• Bên {ben} tính {ben} = {g}^{k} mod {p} = {pub} và gửi {ben} = {pub} cho Bên {kia}.")
+        self._sim_try_shared()
+
+    def _sim_try_shared(self):
+        st = self._sim_state()
+        A, B = st["A"], st["B"]
+        if not (A and B):
+            return
+        p = A["p"]
+        Ka = mod_exp(B["pub"], A["k"], p)
+        Kb = mod_exp(A["pub"], B["k"], p)
+        self.sim_Ka.set(str(Ka))
+        self.sim_Kb.set(str(Kb))
+        self._sim_log_add(f"• [Hoàn tất] Alice tính K = {B['pub']}^{A['k']} mod {p} = {Ka} | "
+                          f"Bob tính K = {A['pub']}^{B['k']} mod {p} = {Kb}")
+        if Ka == Kb:
+            self._sim_log_add(f"• => Khóa chung K của hai bên đều bằng {Ka} (SAS: [{sas_code(A['pub'], B['pub'], Ka)}])")
+            if Ka in (1, p - 1):
+                self._sim_log_add(f"• [Cảnh báo] K = {Ka} (±1 mod {p}): p quá nhỏ nên khóa chung rất yếu, chỉ dùng để minh họa.")
+        else:
+            self._sim_log_add("• [LỖI] Hai khóa chung KHÔNG khớp nhau! Hãy bấm [Xóa & Làm lại] rồi thử lại.")
 
     def _sim_send_a(self):
         pg = self._sim_get_pg()
         if not pg:
             return
         p, g = pg
-        try:
-            a = int(self.sim_a.get().strip())
-        except ValueError:
-            messagebox.showerror("Lỗi", "Khóa riêng a phải là số nguyên!")
+        a = self._sim_doc_khoa(self.sim_a, "a")
+        if a is None:
             return
-        if not (2 <= a <= p - 2):
-            messagebox.showwarning("Sai khóa a", f"Khóa a phải nằm trong [2, {p - 2}]!")
+        pub, loi = sim_kiem_tra_khoa(p, g, a, "a (Bên A)")
+        if loi:
+            messagebox.showwarning("Sai khóa a", loi)
             return
-        A = mod_exp(g, a, p)
-        self.sim_A_pub.set(str(A))
-        self.sim_A_recv.set(str(A))
-        self._sim_log_add(f"• Bên A tính A = {g}^{a} mod {p} = {A} và gửi A = {A} cho Bên B.")
-        self._sim_try_shared(p, g)
+        self._sim_ap_dung("A", p, g, a, pub)
 
     def _sim_send_b(self):
         pg = self._sim_get_pg()
         if not pg:
             return
         p, g = pg
-        try:
-            b = int(self.sim_b.get().strip())
-        except ValueError:
-            messagebox.showerror("Lỗi", "Khóa riêng b phải là số nguyên!")
+        b = self._sim_doc_khoa(self.sim_b, "b")
+        if b is None:
             return
-        if not (2 <= b <= p - 2):
-            messagebox.showwarning("Sai khóa b", f"Khóa b phải nằm trong [2, {p - 2}]!")
+        pub, loi = sim_kiem_tra_khoa(p, g, b, "b (Bên B)")
+        if loi:
+            messagebox.showwarning("Sai khóa b", loi)
             return
-        B = mod_exp(g, b, p)
-        self.sim_B_pub.set(str(B))
-        self.sim_B_recv.set(str(B))
-        self._sim_log_add(f"• Bên B tính B = {g}^{b} mod {p} = {B} và gửi B = {B} cho Bên A.")
-        self._sim_try_shared(p, g)
+        self._sim_ap_dung("B", p, g, b, pub)
 
     def _sim_exchange_both(self):
-        self._sim_send_a()
-        self._sim_send_b()
+        """Kiểm tra cả hai bên trước, chỉ gửi khi cả hai đều hợp lệ (một hộp thoại duy nhất nếu có lỗi)."""
+        pg = self._sim_get_pg()
+        if not pg:
+            return
+        p, g = pg
+        a = self._sim_doc_khoa(self.sim_a, "a")
+        if a is None:
+            return
+        b = self._sim_doc_khoa(self.sim_b, "b")
+        if b is None:
+            return
+        pub_a, loi_a = sim_kiem_tra_khoa(p, g, a, "a (Bên A)")
+        pub_b, loi_b = sim_kiem_tra_khoa(p, g, b, "b (Bên B)")
+        loi = [x for x in (loi_a, loi_b) if x]
+        if loi:
+            messagebox.showwarning("Sai khóa riêng", "\n".join("- " + x for x in loi))
+            return
+        self._sim_ap_dung("A", p, g, a, pub_a)
+        self._sim_ap_dung("B", p, g, b, pub_b)
 
     def _sim_reset(self, keep_pg: bool = False):
+        self._sim_state().update({"A": None, "B": None})
         if not keep_pg:
             self.sim_preset.set("(p = 23, g = 5)")
             self.sim_p.set("23")
             self.sim_g.set("5")
+            self.sim_a.set("6")
+            self.sim_b.set("15")
         for v in (self.sim_A_pub, self.sim_B_pub, self.sim_A_recv, self.sim_B_recv, self.sim_Ka, self.sim_Kb):
             v.set("")
         self.sim_log.delete("1.0", tk.END)
