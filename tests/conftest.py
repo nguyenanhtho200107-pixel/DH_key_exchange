@@ -1,5 +1,5 @@
 """
-Cấu hình chung cho toàn bộ tests/ (pytest tự nạp file này).
+Cấu hình chung cho toàn bộ tests
 
 Quy ước của nhóm: hashlib, sympy, mpmath và pow() chỉ được dùng trong tests/ để đối chiếu.
 """
