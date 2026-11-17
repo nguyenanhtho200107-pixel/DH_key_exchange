@@ -1,5 +1,5 @@
 """
-Báo cáo kiểm thử DH (core/dh.py): chạy trực tiếp `python tests/run_report.py` (từ thư mục gốc repo).
+Báo cáo kiểm thử DH (core/dh.py): chạy trực tiếp `python tests/run_report.py` .
 In: bảng TC1-TC5, đối chiếu mod_exp với pow(), đối chiếu khác, kiểm tra RFC 3526,
 tính tay so với chương trình, dòng tổng kết "x/y đạt". Đồng thời ghi docs/test_log.txt.
 Thoát với mã 0 nếu tất cả đạt, 1 nếu có mục lỗi.
