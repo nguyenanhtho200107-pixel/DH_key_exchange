@@ -1,5 +1,5 @@
 """
-Kiểm thử app/cli.py (phần CLI): nhập liệu an toàn, kiểm tra tham số, các mục demo 1-6, menu và chế độ --auto.
+Kiểm thử app/cli.py : nhập liệu an toàn, kiểm tra tham số, các mục demo 1-6, menu và chế độ --auto.
 Quy ước: pow() chỉ dùng trong tests/ để đối chiếu.
 """
 import os
