@@ -1,5 +1,5 @@
 """
-Kiểm thử app/filecrypt.py (phần CLI): tạo tệp mẫu, mã hoá và giải mã tệp bằng khoá DH, bảng đo tốc độ.
+Kiểm thử app/filecrypt.py : tạo tệp mẫu, mã hoá và giải mã tệp bằng khoá DH, bảng đo tốc độ.
 Mọi tệp được ghi trong thư mục tạm (fixture thu_muc_tam), không đụng thư mục thật của repo.
 """
 import hashlib
