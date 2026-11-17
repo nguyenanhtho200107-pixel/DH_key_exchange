@@ -1,84 +1,166 @@
-# File: core/stream.py
+# File: core/dlog.py
 """
-Mã dòng (stream cipher) dùng khóa chung Diffie-Hellman để mã hóa văn bản và tệp.
-
-Cấu trúc (chỉ dùng SHA-256 tự cài đặt `custom_sha256_bytes` trong core/dh.py,
-KHÔNG dùng thư viện băm có sẵn của Python):
-
-  1. Rút khóa : dk = SHA256("DH-STREAM-KDF-v1|" || bytes(K))      (K là khóa chung DH, số nguyên)
-  2. Luồng khóa: block_i = SHA256(dk || nonce || i)  với i = 0, 1, 2, ... (i là số 8 byte, big-endian)
-                 keystream = block_0 || block_1 || ...           (mỗi khối 32 byte)
-  3. Mã hóa   : ciphertext = plaintext XOR keystream (giải mã cũng là phép XOR đó)
-
-Với văn bản, `encrypt_text_hex` sinh nonce 8 byte ngẫu nhiên cho mỗi lần mã hóa và đặt nó ở đầu
-chuỗi Hex, nên cùng một bản rõ và cùng một khóa vẫn cho bản mã khác nhau.
-
-LƯU Ý (mức độ bài tập lớn): đây là mã minh họa. Nó KHÔNG có xác thực toàn vẹn (kẻ tấn công lật bit
-bản mã thì lật đúng bit tương ứng của bản rõ) và dùng lại cùng (khóa, nonce) cho hai bản rõ sẽ lộ
-phép XOR của chúng. Trong thực tế hãy dùng AES-GCM hoặc ChaCha20-Poly1305.
+Cài đặt các thuật toán giải bài toán Logarit rời rạc (Discrete Logarithm Problem - DLP):
+Tìm số mũ x sao cho: g^x ≡ h (mod p).
 """
+import math
+import time
 
-import secrets
-
-from core.dh import custom_sha256_bytes
-
-TIEN_TO_KDF = b"DH-STREAM-KDF-v1|"
-KICH_THUOC_KHOI = 32      # SHA-256 cho ra 32 byte mỗi lần gọi
-KICH_THUOC_NONCE = 8      # byte
+from dh import mod_exp
+from stream import encrypt_text_hex, decrypt_text_hex
 
 
-def _khoa_sang_bytes(key) -> bytes:
-    """Đổi khóa chung (số nguyên không âm, hoặc bytes) sang bytes."""
-    if isinstance(key, bool):
-        raise TypeError("Khóa phải là số nguyên hoặc bytes, không phải bool.")
-    if isinstance(key, int):
-        if key < 0:
-            raise ValueError("Khóa phải là số nguyên không âm.")
-        return key.to_bytes(max(1, (key.bit_length() + 7) // 8), "big")
-    if isinstance(key, (bytes, bytearray)):
-        return bytes(key)
-    raise TypeError("Khóa phải là số nguyên hoặc bytes.")
+def dlog_bruteforce(g: int, h: int, p: int, limit: int = 10**6):
+    """1. Thuật toán vét cạn: thử lần lượt x = 0, 1, 2, ... cho đến khi g^x ≡ h (mod p)."""
+    cur = 1
+    g_mod = g % p
+    target = h % p
+    max_steps = min(p, limit)
+    for x in range(max_steps):
+        if cur == target:
+            return x
+        cur = (cur * g_mod) % p
+    return None
 
 
-def derive_key(key) -> bytes:
-    """Bước 1: rút khóa 32 byte từ khóa chung DH."""
-    return custom_sha256_bytes(TIEN_TO_KDF + _khoa_sang_bytes(key))
+def dlog_bsgs(g: int, h: int, p: int, order: int = None):
+    """2. Thuật toán Baby-Step Giant-Step (BSGS - Shanks)."""
+    g_mod = g % p
+    h_mod = h % p
+
+    if h_mod == 1:
+        return 0
+    if g_mod == 0 or math.gcd(g_mod, p) != 1:
+        return None
+
+    n = order if order is not None else (p - 1)
+    m = math.isqrt(n) + 1
+
+    baby_table = {}
+    cur = 1
+    for j in range(m):
+        if cur not in baby_table:
+            baby_table[cur] = j
+        cur = (cur * g_mod) % p
+
+    g_inv = pow(g_mod, -1, p)
+    g_inv_m = mod_exp(g_inv, m, p)
+
+    gamma = h_mod
+    for i in range(m):
+        if gamma in baby_table:
+            x = i * m + baby_table[gamma]
+            if mod_exp(g_mod, x, p) == h_mod:
+                return x
+        gamma = (gamma * g_inv_m) % p
+    return None
 
 
-def keystream(key, length: int, nonce: bytes = b"") -> bytes:
-    """Bước 2: sinh `length` byte luồng khóa từ (khóa, nonce) bằng SHA-256 ở chế độ đếm."""
-    if length < 0:
-        raise ValueError("length phải >= 0.")
-    dk = derive_key(key)
-    out = bytearray()
-    counter = 0
-    while len(out) < length:
-        out += custom_sha256_bytes(dk + nonce + counter.to_bytes(8, "big"))
-        counter += 1
-    return bytes(out[:length])
+def _factorize(n: int):
+    """Phân tích n ra thừa số nguyên tố."""
+    factors = []
+    d = 2
+    while d * d <= n:
+        if n % d == 0:
+            cnt = 0
+            while n % d == 0:
+                n //= d
+                cnt += 1
+            factors.append((d, cnt))
+        d += 1 if d == 2 else 2
+    if n > 1:
+        factors.append((n, 1))
+    return factors
 
 
-def keystream_xor(data: bytes, key, nonce: bytes = b"") -> bytes:
-    """Bước 3: XOR dữ liệu với luồng khóa. Gọi lại với cùng (key, nonce) sẽ giải mã."""
-    if not data:
-        return b""
-    ks = keystream(key, len(data), nonce)
-    x = int.from_bytes(data, "big") ^ int.from_bytes(ks, "big")
-    return x.to_bytes(len(data), "big")
+def crt_solve(remainders, moduli):
+    """Định lý số dư Trung Hoa (CRT)."""
+    M = 1
+    for m_i in moduli:
+        M *= m_i
+    x = 0
+    for r_i, m_i in zip(remainders, moduli):
+        M_i = M // m_i
+        y_i = pow(M_i, -1, m_i)
+        x = (x + r_i * M_i * y_i) % M
+    return x
 
 
-def encrypt_text_hex(text: str, key) -> str:
-    """Mã hóa chuỗi (UTF-8, hỗ trợ tiếng Việt có dấu). Trả về Hex = nonce (8 byte) || bản mã."""
-    nonce = secrets.token_bytes(KICH_THUOC_NONCE)
-    cipher = keystream_xor(text.encode("utf-8"), key, nonce)
-    return (nonce + cipher).hex()
+def dlog_pohlig_hellman(g: int, h: int, p: int):
+    """3. Thuật toán Pohlig-Hellman."""
+    n = p - 1
+    factors = _factorize(n)
+    remainders = []
+    moduli = []
+
+    for q, e in factors:
+        q_e = q ** e
+        g_i = mod_exp(g, n // q_e, p)
+        h_i = mod_exp(h, n // q_e, p)
+        x_i = dlog_bsgs(g_i, h_i, p, order=q_e)
+        if x_i is None:
+            return None
+        remainders.append(x_i)
+        moduli.append(q_e)
+
+    return crt_solve(remainders, moduli)
 
 
-def decrypt_text_hex(hex_text: str, key) -> str:
-    """Giải mã chuỗi Hex tạo bởi encrypt_text_hex.
-    Khóa sai sẽ ra chuỗi vô nghĩa (ký tự lỗi được thay bằng U+FFFD), không văng lỗi giải mã UTF-8."""
-    raw = bytes.fromhex(hex_text)          # Hex sai định dạng -> ValueError
-    if len(raw) < KICH_THUOC_NONCE:
-        raise ValueError("Chuỗi Hex quá ngắn: thiếu nonce 8 byte ở đầu.")
-    nonce, cipher = raw[:KICH_THUOC_NONCE], raw[KICH_THUOC_NONCE:]
-    return keystream_xor(cipher, key, nonce).decode("utf-8", errors="replace")
+def demo_eve_crack():
+    print("\n" + "=" * 68)
+    print(" DEMO 7A: EVE BẺ KHÓA DIFFIE-HELLMAN (p ~ 32-bit) BẰNG BSGS")
+    print("=" * 68)
+    p = 3221225479
+    g = 5
+    a_alice = 123456789
+    b_bob = 987654321
+
+    A = mod_exp(g, a_alice, p)
+    B = mod_exp(g, b_bob, p)
+    K_chung = mod_exp(B, a_alice, p)
+
+    tin_goc = "Mat khau kho du lieu: NEU_2026_SECRET"
+    ban_ma_hex = encrypt_text_hex(tin_goc, K_chung)
+
+    print("  [Bước 1] Eve thu thập tham số công khai và bản mã.")
+    print(f"           Bản mã (Hex) = {ban_ma_hex}")
+
+    t0 = time.perf_counter()
+    a_eve = dlog_bsgs(g, A, p)
+    dt = time.perf_counter() - t0
+    print(f"  [Bước 2] Tìm ra khóa riêng: a = {a_eve} (Thời gian: {dt:.4f}s)")
+
+    K_eve = mod_exp(B, a_eve, p)
+    tin_eve_doc = decrypt_text_hex(ban_ma_hex, K_eve)
+    print(f"  [Bước 4] Giải mã thành công: '{tin_eve_doc}'")
+
+
+def demo_pohlig_hellman_compare():
+    print("\n" + "=" * 68)
+    print(" DEMO 7B: SO SÁNH POHLIG-HELLMAN GIỮA (p-1) TRƠN VÀ SAFE PRIME")
+    print("=" * 68)
+
+    p_smooth = 1082601054151
+    g_smooth = 7
+    a_secret = 456789123
+    A_smooth = mod_exp(g_smooth, a_secret, p_smooth)
+
+    p_safe = 549755815199
+    g_safe = 13
+    A_safe = mod_exp(g_safe, a_secret, p_safe)
+
+    t0 = time.perf_counter()
+    res_smooth = dlog_pohlig_hellman(g_smooth, A_smooth, p_smooth)
+    time_smooth = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    res_safe = dlog_pohlig_hellman(g_safe, A_safe, p_safe)
+    time_safe = time.perf_counter() - t1
+
+    print(f"  1. p trơn (Smooth) thời gian : {time_smooth:.6f}s (a = {res_smooth})")
+    print(f"  2. Safe Prime time          : {time_safe:.6f}s (a = {res_safe})")
+
+
+if __name__ == "__main__":
+    demo_eve_crack()
+    demo_pohlig_hellman_compare()
