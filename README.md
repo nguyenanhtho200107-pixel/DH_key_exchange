@@ -116,7 +116,6 @@ DH_key_exchange/
 ├── docs/
 │   └── images/               # Thư mục lưu ảnh minh họa cho README và báo cáo
 ├── .gitignore                # Loại trừ __pycache__, .pytest_cache, samples/...
-├── LICENSE                   # Giấy phép mã nguồn mở MIT
 └── README.md                 # Tài liệu tổng quan dự án (tệp này)
 ```
 
