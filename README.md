@@ -76,7 +76,7 @@ pip install -r tests/requirements.txt
 ## 🖼️ Minh họa giao diện & Kết quả thực nghiệm
 
 ### Giao diện điều khiển trực quan (GUI)
-![Giao diện điều khiển trực quan Diffie-Hellman GUI](docs/images/gui_demo.png)
+![Giao diện điều khiển trực quan Diffie-Hellman GUI](docs/images/guigiaodien.jpg)
 
 ### Kết quả kiểm thử tự động (28/28 ca đạt)
 ![Kết quả thực thi bộ kiểm thử tự động 28 ca](docs/images/test_report.png)
