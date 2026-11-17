@@ -1,5 +1,5 @@
 """
-Kiểm thử core/dlog.py (phần Dev): vét cạn, BSGS, CRT, Pohlig-Hellman và hai demo.
+Kiểm thử core/dlog.py : vét cạn, BSGS, CRT, Pohlig-Hellman và hai demo.
 Quy ước: sympy và pow() chỉ dùng trong tests/ để đối chiếu.
 """
 import io
