@@ -64,7 +64,7 @@ pip install -r tests/requirements.txt
 ### 3. Chạy kiểm thử tự động
 * **Chạy toàn bộ bộ kiểm thử đơn vị với Pytest:**
   ```bash
-  pytest -v
+ python -m pytest -v
   ```
 * **Xuất báo cáo đối chiếu 28 ca kiểm thử:**
   ```bash
