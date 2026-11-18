@@ -81,6 +81,10 @@ pip install -r tests/requirements.txt
 ### Kết quả kiểm thử tự động (28/28 ca đạt)
 ![Kết quả thực thi bộ kiểm thử tự động 28 ca](docs/images/test_report.png)
 
+### Kết quả kiểm thử tự động toàn hệ thống (Pytest)
+![Kết quả chạy 498 ca kiểm thử Pytest](docs/images/pytest_report.jpg)
+*Toàn bộ 498 ca kiểm thử tự động qua 7 tệp kiểm thử đều vượt qua 100% (`498 passed in 38.40s`).*
+
 ---
 
 ## 📁 Cấu trúc dự án & Thứ tự phụ thuộc
@@ -101,18 +105,18 @@ DH_key_exchange/
 │   ├── cli.py                # Giao diện dòng lệnh tương tác 8 chức năng & chế độ --auto
 │   ├── filecrypt.py          # Xử lý mã hóa/giải mã tệp tin thực tế (.txt, .png)
 │   └── benchmark.py          # Đo hiệu năng BSGS & vẽ biểu đồ log bằng Matplotlib
-├── tests/                    # Tầng kiểm thử tự động (Pytest & đối chiếu chuẩn)
-│   ├── README.md             # Hướng dẫn chạy kiểm thử chi tiết
-│   ├── conftest.py           # Cấu hình môi trường kiểm thử Pytest
-│   ├── requirements.txt      # Danh sách thư viện phục vụ kiểm thử & vẽ biểu đồ
-│   ├── run_report.py         # Trình xuất báo cáo tổng hợp 28 ca kiểm thử
-│   ├── test_dh.py            # Kiểm thử giao thức DH, Miller-Rabin, SHA-256 & lỗi biên
-│   ├── test_dlog.py          # Kiểm thử thuật toán phá mã BSGS & Pohlig-Hellman
-│   ├── test_stream.py        # Kiểm thử tính toàn vẹn mã hóa/giải mã dòng
-│   ├── test_cli.py           # Kiểm thử luồng nhập liệu & bắt lỗi CLI
-│   ├── test_gui.py           # Kiểm thử các thành phần & logic giao diện GUI
-│   ├── test_filecrypt.py     # Kiểm thử mã hóa tệp văn bản & ảnh nhị phân
-│   └── test_benchmark.py     # Kiểm thử quy trình đo hiệu năng & xuất file
+├── tests/                  # Tầng kiểm thử tự động (498 ca Pytest & đối chiếu chuẩn)
+│   ├── README.md           # Hướng dẫn chạy kiểm thử chi tiết
+│   ├── conftest.py         # Cấu hình môi trường kiểm thử Pytest
+│   ├── requirements.txt    # Danh sách thư viện phục vụ kiểm thử & vẽ biểu đồ
+│   ├── run_report.py       # Trình xuất báo cáo tổng hợp 28 ca kiểm thử
+│   ├── test_dh.py          # Kiểm thử giao thức DH, Miller-Rabin, SHA-256 & lỗi biên
+│   ├── test_dlog.py        # Kiểm thử thuật toán phá mã BSGS & Pohlig-Hellman
+│   ├── test_stream.py      # Kiểm thử tính toàn vẹn mã hóa/giải mã dòng
+│   ├── test_cli.py         # Kiểm thử luồng nhập liệu & bắt lỗi CLI
+│   ├── test_gui.py         # Kiểm thử các thành phần & logic giao diện GUI
+│   ├── test_filecrypt.py   # Kiểm thử mã hóa tệp văn bản & ảnh nhị phân
+│   └── test_benchmark.py   # Kiểm thử quy trình đo hiệu năng & xuất file
 ├── docs/
 │   └── images/               # Thư mục lưu ảnh minh họa cho README và báo cáo
 ├── .gitignore                # Loại trừ __pycache__, .pytest_cache, samples/...
