@@ -204,7 +204,7 @@ def rsa_verify(msg: str, sig: int, pub) -> bool:
 
 
 # ==============================================================================
-# 4. NHẬP THAM SỐ DÙNG CHUNG (chế độ DH thường và chế độ MITM đều dùng)
+# 4. NHẬP THAM SỐ DÙNG CHUNG (chế độ DH thường và chế độ MITM)
 # ==============================================================================
 
 # Bộ mặc định = ví dụ ở mục 4.2 của báo cáo (bỏ trống rồi bấm Enter để dùng).
