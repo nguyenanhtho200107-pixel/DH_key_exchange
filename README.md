@@ -88,7 +88,7 @@ pip install -r tests/requirements.txt
 
 ---
 
-## 📁 Cấu trúc dự án & Thứ tự phụ thuộc
+## 📁 Cấu trúc dự án 
 
 Hệ thống được thiết kế theo kiến trúc phân tầng sạch, đảm bảo nguyên tắc một chiều (`app/` và `tests/` gọi `core/`, tầng `core/` hoàn toàn độc lập):
 ```text
