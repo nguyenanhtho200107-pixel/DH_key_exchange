@@ -50,7 +50,7 @@ pip install -r tests/requirements.txt
 ```
 
 ### 2. Khởi chạy ứng dụng
-* **Chạy giao diện đồ họa (Khuyên dùng):**
+* **Chạy giao diện đồ họa:**
   ```bash
   python -m app.gui
   ```
