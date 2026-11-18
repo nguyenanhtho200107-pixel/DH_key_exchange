@@ -132,7 +132,7 @@ def demo_eve_crack():
 
     K_eve = mod_exp(B, a_eve, p)
     tin_eve_doc = decrypt_text_hex(ban_ma_hex, K_eve)
-    print(f"  [Bước 4] Giải mã thành công: '{tin_eve_doc}'")
+    print(f"  [Bước 3] Giải mã thành công: '{tin_eve_doc}'")
 
 
 def demo_pohlig_hellman_compare():
