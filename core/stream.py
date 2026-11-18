@@ -2,7 +2,7 @@
 
 import secrets
 
-from dh import custom_sha256_bytes
+from core.dh import custom_sha256_bytes
 
 TIEN_TO_KDF = b"DH-STREAM-KDF-v1|"
 KICH_THUOC_KHOI = 32      # SHA-256 cho ra 32 byte mỗi lần gọi

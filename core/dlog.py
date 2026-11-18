@@ -6,8 +6,8 @@ Tìm số mũ x sao cho: g^x ≡ h (mod p).
 import math
 import time
 
-from dh import mod_exp
-from stream import encrypt_text_hex, decrypt_text_hex
+from core.dh import mod_exp
+from core.stream import encrypt_text_hex, decrypt_text_hex
 
 
 def dlog_bruteforce(g: int, h: int, p: int, limit: int = 10**6):
